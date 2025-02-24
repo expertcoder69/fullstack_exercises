@@ -1,195 +1,132 @@
-import { useState, useEffect } from 'react'
-import noteService from './services/notes'
-
-const Filter = ({ text, value, onChange }) => {
-  return (
-    <>
-      {text}<input value={value} onChange={onChange} />
-    </>
-  )
-}
-
-const PersonForm = ({ onSubmit, data }) => {
-  return (
-    <form onSubmit={onSubmit}>
-      <Single sets={data} />
-      <div>
-        <button type="submit">add</button>
-      </div>
-    </form>
-  )
-}
-
-const Single = ({ sets }) => {
-  return (
-    <>
-      {sets.map((set, index) => (
-        <div key={index}>
-          {set.text}: <input value={set.value} onChange={set.onChange} />
-        </div>
-      ))}
-    </>
-  )
-}
-
-const Persons = ({ data, onClick }) => (
-  data.map((person) => (
-    <div key={person.id}>
-      <span>{person.name} </span><span>{person.number}</span> <span><Button text='delete' onClick={onClick} name={person.name} id={person.id} /></span>
-    </div>
-  )
-  )
-)
-
-const Button = ({ onClick, text, name, id }) => {
-  return (
-    <>
-      <button onClick={() => onClick(name, id)}>{text}</button>
-    </>
-  )
-}
-
-const Notification = ({ message }) => {
-  if (!message || !message.text) {
-    return null
-  }
-  return (
-    <div className={message.type === 'error' ? 'error' : 'success'}>
-      {message.text}
-    </div>
-  )
-}
+import { useState } from "react";
+import Filter from "./components/Filter";
+import PersonForm from "./components/PersonForm";
+import Persons from "./components/Persons";
+import { useEffect } from "react";
+import numService from "./services/num";
+import Noti from "./components/Noti";
+import "./App.css";
 
 const App = () => {
-  const [persons, setPersons] = useState([])
-  const [newName, setNewName] = useState('')
-  const [newPhone, setNewPhone] = useState('')
-  const [newFilter, setNewFilter] = useState('')
-  const [message, setMessage] = useState(null)
-
-  const fetchPersons = () => {
-    console.log('effect')
-    noteService.getAll()
-      .then(response => {
-        console.log('promise fulfilled')
-        setPersons(response.data)
-        console.log(response.data)
+  const [persons, setPersons] = useState([]);
+  const [newName, setNewName] = useState("");
+  const [newNum, setNewNum] = useState("");
+  const [search, setSearch] = useState("");
+  const [noti, setNoti] = useState(null);
+  useEffect(() => {
+    numService
+      .getAll()
+      .then((persons) => {
+        setPersons(persons);
       })
-  }
+      .catch((error) => {
+        console.error(error.message);
+      });
+  }, []);
 
-  useEffect(fetchPersons, [])
-
-  const addNote = (event) => {
-    event.preventDefault()
-    const existingPerson = persons.find(person => person.name === newName)
-
-    if (existingPerson) {
-      if (window.confirm(`${newName} is already added to phonebook, replace the old one with new one`)) {
-        const noteObject = {
+  const addPerson = (event) => {
+    event.preventDefault();
+    const sameName = persons.find((person) => person.name === newName);
+    if (
+      sameName &&
+      window.confirm(
+        `${newName} is already added to the phonebook, replace the old number with a new one?`
+      )
+    ) {
+      setPersons(
+        persons.map((person) =>
+          person.name === newName ? { ...person, number: newNum } : person
+        )
+      );
+      numService
+        .update(persons.find((person) => person.name === newName).id, {
           name: newName,
-          number: newPhone,
-        }
-        noteService.update(existingPerson.id, noteObject)
-          .then(response => {
-            setPersons(persons.map(person => person.id !== existingPerson.id ? person : response.data))
-            setMessage({ text: 'Changed phone number', type: 'success' })
-            setTimeout(() => {
-              setMessage(null)
-            }, 5000)
-            setNewName('')
-            setNewPhone('')
-            console.log(response.data)
-          })
-          .catch(error => {
-            console.error('Failed to update person:', error)
-            setMessage({ text: `Information of '${existingPerson.name}' has already been removed from server`, type: 'error' })
-            setPersons(persons.filter(person => person.id !== existingPerson.id));
-            setTimeout(() => {
-              setMessage(null)
-            }, 5000)
-            setNewName('');
-            setNewPhone('');
-          })
-      }
-    }
-
-    else {
-      const noteObject = {
-        name: newName,
-        number: newPhone,
-      }
-      noteService
-        .create(noteObject)
-        .then(response => {
-          setPersons(persons.concat(response.data))
-          setMessage({ text: `Added ${newName}`, type: 'success' })
+          number: newNum,
+        })
+        .then((person) => {
+          setPersons(persons.map((p) => (p.id !== person.id ? p : person)));
+          setNoti({ type: "success", message: `Updated ${newName}` });
           setTimeout(() => {
-            setMessage(null)
-          }, 5000)
-          setNewName('')
-          setNewPhone('')
-          console.log(response.data);
+            setNoti(null);
+          }, 5000);
         })
-        .catch(error => {
-          console.error('Failed to add person:', error)
-          alert('There was an error adding the person.')
-        })
+        .catch((error) => {
+          setNoti({ type: "error", message: `Cannot update ${newName}` });
+          setTimeout(() => {
+            setNoti(null);
+          }, 5000);
+        });
+      return;
     }
-  }
+    const personObject = {
+      name: newName,
+      number: newNum,
+    };
 
-  const removeId = (name, id) => {
-    if (window.confirm(`Delete ${name}`)) {
-      noteService
+    numService
+      .create(personObject)
+      .then((person) => {
+        setPersons(persons.concat(person));
+        setNoti({ type: "success", message: `Added ${newName}` });
+        setTimeout(() => {
+          setNoti(null);
+        }, 5000);
+      })
+      .catch((error) => {
+        setNoti({ type: "error", message: error.response.data.error });
+        setTimeout(() => {
+          setNoti(null);
+        }, 50000);
+      });
+
+    setNewName("");
+    setNewNum("");
+  };
+
+  const handleDelete = (id) => {
+    const person = persons.find((p) => p.id === id);
+    if (person && window.confirm(`Delete ${person.name}?`)) {
+      numService
         .remove(id)
-        .then(response => {
-          setPersons(persons.filter(person => person.id !== id))
-          console.log(response.data);
-        })
-        .catch(error => {
-          console.error('Failed to delete:', error)
-          setMessage({ text: `Information of ${name} has already been removed from server`, type: 'error' })
-          setPersons(persons.filter(person => person.id !== id))
+        .then(() => {
+          setPersons(persons.filter((p) => p.id !== id));
+          setNoti({ type: "success", message: `Deleted ${person.name}` });
           setTimeout(() => {
-            setMessage(null)
-          }, 5000)
+            setNoti(null);
+          }, 5000);
         })
+        .catch((error) => {
+          setNoti({ type: "error", message: `Cannot delete ${person.name}` });
+          setTimeout(() => {
+            setNoti(null);
+          }, 5000);
+        });
     }
-  }
-
+  };
 
   const handleNameChange = (event) => {
-    setNewName(event.target.value.trim())
-  }
-
-  const handlePhoneChange = (event) => {
-    setNewPhone(event.target.value.trim())
-  }
-
-  const filteredPersons = persons.filter(person =>
-    person.name.toLowerCase().includes(newFilter.toLowerCase())
-  )
-
-  const handleFilterChange = (event) => {
-    setNewFilter(event.target.value)
-  }
-
-  const data = [
-    { text: "name", value: newName, onChange: handleNameChange },
-    { text: "number", value: newPhone, onChange: handlePhoneChange }
-  ]
-
-
+    setNewName(event.target.value);
+  };
+  const handleNumChange = (event) => {
+    setNewNum(event.target.value);
+  };
   return (
     <div>
-      <Notification message={message} />
       <h2>Phonebook</h2>
-      <Filter value={newFilter} onChange={handleFilterChange} text="filter shown with:" />
+      <Noti message={noti} />
+      <Filter search={search} setSearch={setSearch} persons={persons} />
       <h3>Add a new</h3>
-      <PersonForm onSubmit={addNote} data={data} />
+      <PersonForm
+        addPerson={addPerson}
+        newName={newName}
+        handleNameChange={handleNameChange}
+        newNum={newNum}
+        handleNumChange={handleNumChange}
+      />
       <h3>Numbers</h3>
-      <Persons data={filteredPersons} onClick={removeId} />
+      <Persons persons={persons} handleDelete={handleDelete} />
     </div>
-  )
-}
+  );
+};
 
-export default App
+export default App;
